@@ -90,26 +90,6 @@ class BiaffineTagger(nn.Module):
         span_logits = self.biaffne_layer(start_logits, end_logits)
         span_logits = span_logits.squeeze(-1).contiguous()
         return span_logits
-
-
-class GlobalCorres_v0(nn.Module):
-    # 原论文中的global Correspondence 计算方式
-    def __init__(self,config,params) -> None:
-        super().__init__()
-        # global correspondence
-        self.global_corres = MultiNonLinearClassifier(config.hidden_size, 1, params.drop_prob)
-
-    def forward(self,sequence_output,attention_mask):
-        bs, seq_len, h = sequence_output.size()
-        # before fuse relation representation
-        sub_extend = sequence_output.unsqueeze(2).expand(-1, -1, seq_len, -1)  # (bs, s, s, h)
-        # (bs, seq_len, seq_len)
-        corres_pred = self.global_corres(sub_extend).squeeze(-1)
-        mask_tmp1 = attention_mask.unsqueeze(-1)
-        mask_tmp2 = attention_mask.unsqueeze(1)
-        corres_mask = mask_tmp1 * mask_tmp2
-        return corres_pred,corres_mask
-    
     
 class GlobalCorres(nn.Module):
     # 使用BiaffineTagger计算global Correspondence
