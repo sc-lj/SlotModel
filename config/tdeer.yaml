@@ -1,0 +1,30 @@
+model_name: tdeer
+
+# specify max sample triples
+max_sample_triples: 
+
+# specify negative sample num
+neg_samples:
+
+loss_weight:
+- 1
+- 1
+- 1
+- 8
+# 是否对整句的token的表征进行求平均作为预测关系的表征
+avg_pool: false
+
+# 是否使用R-drop训练策略
+is_rdrop: false
+# 
+hidden_fuse: false
+# 融合特定几层的hidden states,最多12层
+hidden_fuse_layers:
+- 10
+- 11
+- 12
+# 数量要与hidden_fuse_layers一致
+fuse_layers_weights:
+- 0.2
+- 0.3
+- 0.5
