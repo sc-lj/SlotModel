@@ -119,10 +119,13 @@ class GlobalCorres_v1(nn.Module):
         self.tag_type_embedding = nn.Embedding(self.tag_size,config.hidden_size,padding_idx=0)
         self.tag_linear = nn.Linear(config.hidden_size,config.hidden_size)
         self.linear = nn.Linear(config.hidden_size,config.hidden_size)
+        self.linear_rel = nn.Linear(config.hidden_size,config.hidden_size)
 
-    def forward(self,sequence_output,attention_mask,entity_type):
+    def forward(self,sequence_output,attention_mask,entity_type,rel_emb):
         tag_type_embedding = self.tag_type_embedding(entity_type)
         tag_type_embedding = self.tag_linear(tag_type_embedding)
+        rel_emb = self.linear_rel(rel_emb)
+        rel_emb = rel_emb.unsqueeze(1)
         # tag_type_embedding = torch.mean(tag_type_embedding,dim=1,keepdim=True)
         hiddens = sequence_output+tag_type_embedding # [batch_size,seq_len,hidden_size]
         hiddens = self.linear(hiddens)
@@ -139,17 +142,16 @@ class EntityModel(nn.Module):
         self.emb_fusion = params.emb_fusion
         self.intent_num = params.intent_number
         self.seq_tag_size = params.seq_tag_size
-        self.rel_embedding = nn.Embedding(self.intent_num, config.hidden_size)
         self.sequence_tagging_sub = MultiNonLinearClassifier(config.hidden_size, self.seq_tag_size, params.drop_prob)
         self.cond_layer = ConditionalLayerNorm(config.hidden_size,config.hidden_size)
         self.linear = nn.Linear(config.hidden_size*2,config.hidden_size)
         self.activate_layer = nn.ReLU6()
         self.intent_linear = nn.Linear(config.hidden_size,config.hidden_size)
         
-    def forward(self,sequence_output,potential_rels,attention_mask):
+    def forward(self,sequence_output,rel_emb,attention_mask):
         bs, seq_len, h = sequence_output.size()
         # 获取关系的embedding信息
-        rel_emb = self.rel_embedding(potential_rels)
+        # rel_emb = self.rel_embedding(potential_rels)
         rel_emb = self.intent_linear(rel_emb)
         # relation embedding vector fusion
         rel_emb = rel_emb.unsqueeze(1).expand(-1, seq_len, h)
@@ -180,9 +182,9 @@ class PRGC(BertPreTrainedModel):
         # relation judgement
         self.intent_judgement = MultiNonLinearClassifier(config.hidden_size, self.intent_num, params.drop_prob)
         self.global_corres = GlobalCorres(config,params)
-        self.global_corres_v0 = GlobalCorres_v0(config,params)
         self.global_corres_v1 = GlobalCorres_v1(config,params)
         self.entity_model = EntityModel(config,params)
+        self.rel_embedding = nn.Embedding(self.intent_num, config.hidden_size)
         self.init_weights()
 
     @staticmethod
@@ -218,8 +220,10 @@ class PRGC(BertPreTrainedModel):
             intent_pred_prob = torch.softmax(intent_pred_hidden,-1)
             intent_pred = intent_pred_prob.argmax(-1)
             potential_intents = intent_pred
+        
+        rel_emb = self.rel_embedding(potential_intents)
 
-        output_sub = self.entity_model(sequence_output,potential_intents,attention_mask)
+        output_sub = self.entity_model(sequence_output,rel_emb,attention_mask)
         attention_mask = attention_mask.clone()
         attention_mask[:,0] = 0 
         attention_mask[:,-1] = 0
@@ -234,8 +238,8 @@ class PRGC(BertPreTrainedModel):
         else:
             entity_ids = (seq_tags>0).int()
             entity_type = torch.ceil(seq_tags/2).long()
-        corres_pred,corres_mask = self.global_corres(sequence_output,attention_mask,entity_ids)
-        # corres_pred,corres_mask = self.global_corres_v1(sequence_output,attention_mask,entity_type)
+        # corres_pred,corres_mask = self.global_corres(sequence_output,attention_mask,entity_ids)
+        corres_pred,corres_mask = self.global_corres_v1(sequence_output,attention_mask,entity_type,rel_emb)
         return output_sub,intent_pred_hidden,corres_pred,corres_mask
 
 
