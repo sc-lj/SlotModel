@@ -299,7 +299,7 @@ class PRGCPytochLighting(pl.LightningModule):
         # loss_matrix = (self.corres_loss_func(corres_pred,corres_tags.float()) * corres_mask).sum() / corres_mask.sum()
         loss_matrix = self.corres_global_loss_func(corres_pred,corres_tags.float())
         loss_rel = self.rel_loss_func(rel_pred_hidden, relation)
-        loss = loss_seq_sub + loss_matrix + loss_rel
+        loss = 2*loss_seq_sub + 2*loss_matrix + loss_rel
         return loss
     
     def validation_step(self,batches,batch_idx):
